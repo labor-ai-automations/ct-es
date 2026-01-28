@@ -217,6 +217,14 @@
     // Inicializa o cliente Supabase usando a sintaxe correta do SDK
     window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // CNPJs FAMA e DF (Repetidos para Lógica de Validação no Frontend)
+    const CNPJS_FAMA = new Set(['75267096000158', '79641288000133']); 
+    const CNPJS_DF = new Set([
+        '24563738000125', '28700585000171', '33264583000117', 
+        '36774169000146', '37231350000179', '41929655000126', 
+        '46076637000162'
+    ]);
+
     // =========================================================
     // VARIÁVEIS DO DOM
     // =========================================================
@@ -227,7 +235,7 @@
     
     const quickReportBody = document.getElementById('quick-report-body');
     const quickFilterBtn = document.getElementById('quick-filter-btn');
-    const kpiReportGrid = document.getElementById('kpi-report-grid'); // Novo DOM element
+    const kpiReportGrid = document.getElementById('kpi-report-grid');
 
     let selectedFiles = [];
 
@@ -244,21 +252,36 @@
         submitBtn.style.display = selectedFiles.length > 0 ? 'block' : 'none';
     }
 
-    // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD - APENAS CLIQUE)
-    // =========================================================
-    
-    uploadLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        fileInput.click();
-    });
+    // Função de Prova de Valor (Valida se o registro atende à regra de um relatório)
+    function validateReportRule(item, reportType) {
+        const emitenteFama = CNPJS_FAMA.has(item.cnpj_emitente_nfe);
+        const destinatarioDF = CNPJS_DF.has(item.cnpj_destinatario_nfe);
+        const transportadoraRizzo = item.nome_transportadora.toUpperCase().includes('RIZZO');
+        const destinatarioFama = CNPJS_FAMA.has(item.cnpj_destinatario_nfe);
+        const emitenteDF = CNPJS_DF.has(item.cnpj_emitente_nfe);
 
-    fileInput.addEventListener('change', () => {
-        processFiles(fileInput.files);
-    });
+        // A regra deve ser a mesma do nó Code, mas no frontend
+        switch (reportType) {
+            case 'fama-df-rizzo':
+                return emitenteFama && destinatarioDF && transportadoraRizzo;
+            case 'fama-df-outras':
+                return emitenteFama && destinatarioDF && !transportadoraRizzo;
+            case 'fama-outros':
+                return emitenteFama && !destinatarioDF && !destinatarioFama;
+            case 'fama-compras':
+                return destinatarioFama;
+            case 'df-vendas':
+                return emitenteDF && !destinatarioFama && !destinatarioDF;
+            case 'Nao_Classificado':
+                return item.report_type === 'Nao_Classificado';
+            default:
+                return true; // Se for 'all', consideramos válido
+        }
+    }
+
 
     // =========================================================
-    // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (1 POST POR ARQUIVO)
+    // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK
     // =========================================================
     submitBtn.addEventListener('click', async () => {
         if (selectedFiles.length === 0) {
@@ -275,7 +298,7 @@
 
         const uploads = selectedFiles.map(async (file) => {
             const formData = new FormData();
-            formData.append('file', file, file.name); // Envio 1:1
+            formData.append('file', file, file.name);
 
             try {
                 const response = await fetch(WEBHOOK_URL, {
@@ -296,14 +319,12 @@
 
         await Promise.all(uploads);
 
-        // Feedback final
         if (errorCount === 0) {
-            alert(`Sucesso! ${successCount} arquivos enviados para a fila de processamento. Por favor, clique em "Buscar" na consulta rápida.`);
+            alert(`Sucesso! ${successCount} arquivos enviados. Atualize a consulta.`);
         } else {
             alert(`Processamento Concluído. Sucesso: ${successCount}. Erros: ${errorCount}.`);
         }
         
-        // Limpa o estado
         submitBtn.textContent = 'Enviar Arquivos para Processamento';
         submitBtn.disabled = false;
         fileCountSpan.textContent = '0';
@@ -311,7 +332,6 @@
         selectedFiles = [];
         fileInput.value = '';
         
-        // Tenta atualizar a tabela de consulta rápida e KPIs
         await fetchQuickReport();
     });
 
@@ -319,10 +339,10 @@
     // 3. FUNÇÃO DE BUSCA E KPI NO SUPABASE
     // =========================================================
     
-    // Função para buscar dados da tabela
+    // ATUALIZAÇÃO: Busca mais campos para validação
     async function fetchTableData(startDate, endDate, reportType) {
         let query = window.supabaseClient.from(SUPABASE_TABLE) 
-            .select('data_emissao_nfe, chave_nfe, report_type, custo_frete')
+            .select('data_emissao_nfe, chave_nfe, report_type, custo_frete, cnpj_emitente_nfe, cnpj_destinatario_nfe, nome_transportadora, qtd_ctes')
             .order('data_emissao_nfe', { ascending: false });
 
         if (startDate) { query = query.gte('data_emissao_nfe', startDate); }
@@ -336,7 +356,6 @@
 
     // Função para buscar totais agrupados (usando a função RPC get_report_totals)
     async function fetchKpiTotals(startDate, endDate) {
-        // Formata datas para o formato string esperado pela função SQL (ou null)
         const args = {
             start_date: startDate || null,
             end_date: endDate || null
@@ -345,7 +364,6 @@
         const { data, error } = await window.supabaseClient.rpc('get_report_totals', args);
         if (error) {
              console.error("Erro ao chamar get_report_totals:", error);
-             // Retorna um array vazio para não quebrar a aplicação
              return [];
         }
         return data || [];
@@ -357,78 +375,101 @@
         const endDate = document.getElementById('quick-end-date').value;
         const reportType = document.getElementById('quick-report-filter').value;
         
-        quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Carregando...</td></tr>';
+        quickReportBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Carregando...</td></tr>';
         kpiReportGrid.innerHTML = '<h4>Carregando KPIs...</h4>';
         quickFilterBtn.disabled = true;
 
         try {
-            // Buscas em paralelo
             const [tableData, kpiTotals] = await Promise.all([
                 fetchTableData(startDate, endDate, reportType),
                 fetchKpiTotals(startDate, endDate)
             ]);
 
-            renderQuickReport(tableData);
             renderKpiTotals(kpiTotals);
+            renderQuickReport(tableData, reportType); // Passa o reportType para validação
 
         } catch (error) {
             console.error('Erro geral na busca:', error);
-            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff5757; padding: 20px;">ERRO: Falha ao carregar dados.</td></tr>';
+            quickReportBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ff5757; padding: 20px;">ERRO: Falha ao carregar dados.</td></tr>';
             kpiReportGrid.innerHTML = '<h4>Falha ao carregar KPIs.</h4>';
         } finally {
             quickFilterBtn.disabled = false;
         }
     }
 
+    // =========================================================
+    // 4. FUNÇÕES DE RENDERIZAÇÃO
+    // =========================================================
+
     function renderKpiTotals(totals) {
         kpiReportGrid.innerHTML = '';
         
-        // Mapeamento de títulos amigáveis
-        const reportNames = {
-            'fama-df-rizzo': 'Fama → DF (Rizzo)',
-            'fama-df-outras': 'Fama → DF (Outras)',
-            'fama-outros': 'Fama → Outros Clientes',
-            'fama-compras': 'Fama (Compras)',
-            'df-vendas': 'DF → Clientes Gerais',
-            'Nao_Classificado': 'Não Classificado'
+        const reportDetails = {
+            'fama-df-rizzo': { title: 'Fama → DF (Rizzo)', color: '#4CAF50', icon: 'truck-loading' },
+            'fama-df-outras': { title: 'Fama → DF (Outras)', color: '#2196F3', icon: 'shipping-fast' },
+            'fama-outros': { title: 'Fama → Outros Clientes', color: '#FF9800', icon: 'warehouse' },
+            'fama-compras': { title: 'Fama (Compras)', color: '#9C27B0', icon: 'shopping-cart' },
+            'df-vendas': { title: 'DF → Clientes Gerais', color: '#00BCD4', icon: 'store' },
+            'Nao_Classificado': { title: 'Não Classificado', color: '#F44336', icon: 'exclamation-triangle' }
         };
 
         let totalGeralFrete = 0;
         let totalGeralNFes = 0;
 
-        // Cria cards individuais
         totals.forEach(item => {
+            totalGeralFrete += parseFloat(item.total_frete) || 0;
+            totalGeralNFes += parseInt(item.total_nfes) || 0;
+        });
+
+        // Card de Total Geral
+        const totalCard = document.createElement('div');
+        totalCard.style.cssText = 'background: #5c6bc0; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); color: white; grid-column: 1 / -1;';
+        totalCard.innerHTML = `
+            <div style="font-size: 14px; font-weight: 700;"><i class="fas fa-chart-line"></i> TOTAL GERAL CONSOLIDADO</div>
+            <div style="font-size: 24px; font-weight: 900;">${formatCurrency(totalGeralFrete)}</div>
+            <div style="font-size: 12px; opacity: 0.8;">Total de NF-es processadas: ${totalGeralNFes}</div>
+        `;
+        kpiReportGrid.appendChild(totalCard);
+
+        // Cards individuais (Prova de Valor)
+        const sortedTotals = totals.sort((a, b) => {
+            if (a.report_type === 'Nao_Classificado') return 1;
+            if (b.report_type === 'Nao_Classificado') return -1;
+            return parseFloat(b.total_frete) - parseFloat(a.total_frete);
+        });
+        
+        sortedTotals.forEach(item => {
             const frete = parseFloat(item.total_frete) || 0;
             const nFes = parseInt(item.total_nfes) || 0;
             
-            totalGeralFrete += frete;
-            totalGeralNFes += nFes;
-
-            const title = reportNames[item.report_type] || item.report_type;
+            const detail = reportDetails[item.report_type] || { title: item.report_type, color: '#607D8B', icon: 'question-circle' };
+            const percentual = totalGeralFrete > 0 ? (frete / totalGeralFrete) * 100 : 0;
 
             const card = document.createElement('div');
-            card.style.cssText = 'background: #333350; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
+            card.style.cssText = `
+                background: #333350; 
+                padding: 15px; 
+                border-radius: 8px; 
+                border-left: 5px solid ${detail.color}; 
+                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                transition: transform 0.2s;
+            `;
+            
             card.innerHTML = `
-                <div style="font-size: 11px; color: #b0b0b0;">${title.toUpperCase()}</div>
-                <div style="font-size: 18px; font-weight: 700; color: #5c6bc0;">${formatCurrency(frete)}</div>
-                <div style="font-size: 10px; color: #ff5757;">${nFes} NF-es</div>
+                <div style="font-size: 13px; color: ${detail.color}; font-weight: 700; margin-bottom: 5px;">
+                    <i class="fas fa-${detail.icon}"></i> ${detail.title}
+                </div>
+                <div style="font-size: 20px; font-weight: 900;">
+                    ${formatCurrency(frete)}
+                </div>
+                <div style="font-size: 11px; color: #b0b0b0;">
+                    ${nFes} NF-es (${percentual.toFixed(1)}% do Total)
+                </div>
             `;
             kpiReportGrid.appendChild(card);
         });
-
-        // Adiciona um card de Total Geral
-        const totalCard = document.createElement('div');
-        totalCard.style.cssText = 'background: #5c6bc0; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); color: white; grid-column: span 3;';
-        totalCard.innerHTML = `
-            <div style="font-size: 14px; font-weight: 700;">TOTAL GERAL CONSOLIDADO</div>
-            <div style="font-size: 24px; font-weight: 900;">${formatCurrency(totalGeralFrete)}</div>
-            <div style="font-size: 12px; opacity: 0.8;">Total de NF-es: ${totalGeralNFes}</div>
-        `;
-        // Para colocar o total geral no topo, garantindo que a grade 3-colunas comece abaixo dele
-        kpiReportGrid.style.gridTemplateColumns = '1fr'; // Altera temporariamente
-        kpiReportGrid.insertBefore(totalCard, kpiReportGrid.firstChild);
         
-        // Coloca a grade em 3 colunas, mas mantém o total no topo (se a tela for grande o suficiente)
+        // Ajusta a grade para 3 colunas (mantendo o total no topo)
         if (window.innerWidth > 768) {
              kpiReportGrid.style.gridTemplateColumns = '1fr 1fr 1fr';
         } else {
@@ -436,22 +477,64 @@
         }
     }
     
-    function renderQuickReport(data) {
+    // ATUALIZAÇÃO: Adiciona colunas de validação e lógica de PROVA DE VALOR
+    function renderQuickReport(data, selectedReportType) {
+        
+        // Colunas e cabeçalho da tabela
+        quickReportBody.parentElement.querySelector('thead').innerHTML = `
+            <tr style="background-color: #333350;">
+                <th style="padding: 10px; text-align: left;">Data</th>
+                <th style="padding: 10px; text-align: left;">Chave NF-e / CTEs</th>
+                <th style="padding: 10px; text-align: left;">Emit/Dest CNPJ</th>
+                <th style="padding: 10px; text-align: left;">Transp.</th>
+                <th style="padding: 10px; text-align: right;">Frete</th>
+                <th style="padding: 10px; text-align: center; color: #ff5757;">VALIDAÇÃO</th>
+            </tr>
+        `;
+
         if (!data || data.length === 0) {
-            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #b0b0b0;">Nenhum registro encontrado.</td></tr>';
+            quickReportBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #b0b0b0;">Nenhum registro encontrado.</td></tr>';
             return;
         }
 
-        quickReportBody.innerHTML = data.map(item => `
-            <tr style="border-bottom: 1px solid #333350;">
-                <td style="padding: 8px 10px;">${new Date(item.data_emissao_nfe).toLocaleDateString('pt-BR')}</td>
-                <td style="padding: 8px 10px; font-family: monospace;">${item.chave_nfe.substring(0, 18)}...</td>
-                <td style="padding: 8px 10px;">${item.report_type}</td>
-                <td style="padding: 8px 10px; text-align: right;">${formatCurrency(item.custo_frete)}</td>
-            </tr>
-        `).join('');
+        quickReportBody.innerHTML = data.map(item => {
+            
+            // LÓGICA DE PROVA DE VALOR
+            const isValid = validateReportRule(item, selectedReportType);
+            const validationStyle = isValid ? 'background-color: #00bcd4; color: black; font-weight: bold;' : 'background-color: #F44336; color: white; font-weight: bold;';
+            const validationText = isValid ? 'OK' : 'FALHA (Regra)';
+            
+            // CNPJ Emitente FAMA ou DF?
+            const isFamaEmit = CNPJS_FAMA.has(item.cnpj_emitente_nfe) ? ' (FAMA)' : '';
+            const isDFDest = CNPJS_DF.has(item.cnpj_destinatario_nfe) ? ' (DF)' : '';
+
+            return `
+                <tr style="border-bottom: 1px solid #333350;">
+                    <td style="padding: 8px 10px;">${new Date(item.data_emissao_nfe).toLocaleDateString('pt-BR')}</td>
+                    <td style="padding: 8px 10px; font-family: monospace;">
+                        ${item.chave_nfe.substring(0, 18)}...
+                        <div style="font-size: 10px; color: #5c6bc0;">${item.qtd_ctes} CTE(s)</div>
+                    </td>
+                    <td style="padding: 8px 10px; font-size: 11px;">
+                        E: ${item.cnpj_emitente_nfe.substring(0, 8)}...${isFamaEmit}<br>
+                        D: ${item.cnpj_destinatario_nfe.substring(0, 8)}...${isDFDest}
+                    </td>
+                    <td style="padding: 8px 10px; font-size: 11px;">
+                        ${item.nome_transportadora.substring(0, 18)}...
+                    </td>
+                    <td style="padding: 8px 10px; text-align: right; font-weight: bold;">
+                        ${formatCurrency(item.custo_frete)}
+                    </td>
+                    <td style="padding: 8px 10px; text-align: center;">
+                        <span style="padding: 3px 8px; border-radius: 4px; font-size: 10px; ${validationStyle}">
+                            ${validationText}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
-    
+
     // Inicializa a grade de KPIs na primeira carga (para evitar a mensagem "Carregando KPIs..." indefinidamente)
     document.addEventListener('DOMContentLoaded', () => {
         kpiReportGrid.innerHTML = '<h4>Clique em Buscar para carregar os KPIs...</h4>';
