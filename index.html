@@ -1,1 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Rápido de XMLs - FAMA</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Fundo escuro */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #fff;
+        }
+        .container {
+            width: 90%;
+            max-width: 600px;
+            padding: 30px;
+            background-color: #24243e; /* Fundo do card */
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        }
+        h2 {
+            margin-top: 0;
+            font-weight: 600;
+        }
+        .upload-area {
+            border: 3px dashed #5c6bc0; /* Borda azul/roxa */
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            border-color: #ff5757; /* Destaque vermelho */
+            background-color: #2c2c48;
+        }
+        .upload-area.drag-over {
+            border-color: #28a745;
+            background-color: #333350;
+        }
+        .upload-area i {
+            font-size: 48px;
+            color: #ff5757; /* Ícone vermelho */
+            margin-bottom: 15px;
+        }
+        .upload-area p {
+            margin: 5px 0;
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+        .upload-area a {
+            color: #5c6bc0;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .status-box {
+            background-color: #1a1a2e;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            color: #5c6bc0;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #333350;
+        }
+        #submit-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.3s, transform 0.1s;
+            display: none; /* Escondido por padrão */
+            margin-top: 20px;
+        }
+        #submit-btn:hover {
+            background-color: #218838;
+            transform: translateY(-1px);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
 
+<div class="container">
+    <h2>Upload Rápido de XMLs - FAMA</h2>
+
+    <div class="upload-area" id="drop-zone">
+        <i class="fas fa-file-upload"></i>
+        <p>Arraste e solte **todos** os arquivos XML aqui (CT-e e NF-e)</p>
+        <p>ou <a href="#" id="upload-link">clique para selecionar</a></p>
+        <p style="font-size: 12px; color: #ff5757;">Apenas arquivos .xml são permitidos.</p>
+        <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
+    </div>
+
+    <div class="status-box">
+        <span>XMLs prontos para envio:</span>
+        <span id="file-count">0</span>
+    </div>
+
+    <div style="text-align: right;">
+        <button id="submit-btn">Enviar Arquivos para Processamento</button>
+    </div>
+</div>
+
+<script>
+    const WEBHOOK_URL = 'https://n8n-n8n.znxk1t.easypanel.host/webhook/73b57615-b35b-4ed7-951f-2da69149893c';
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadLink = document.getElementById('upload-link');
+    const fileCountSpan = document.getElementById('file-count');
+    const submitBtn = document.getElementById('submit-btn');
+
+    let selectedFiles = [];
+
+    function processFiles(files) {
+        // Filtra apenas arquivos XML e armazena
+        selectedFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.xml'));
+
+        // Atualiza a contagem na tela
+        fileCountSpan.textContent = selectedFiles.length;
+
+        // Mostra ou esconde o botão
+        if (selectedFiles.length > 0) {
+            submitBtn.style.display = 'block';
+        } else {
+            submitBtn.style.display = 'none';
+        }
+    }
+
+    // --- 1. GATILHOS DA INTERFACE (DRAG, DROP, CLICK) ---
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        processFiles(e.dataTransfer.files);
+    });
+
+    uploadLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+        processFiles(fileInput.files);
+    });
+
+    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK ---
+    submitBtn.addEventListener('click', () => {
+        if (selectedFiles.length === 0) {
+            alert("Nenhum arquivo XML selecionado para envio.");
+            return;
+        }
+
+        // Mapeia para pegar apenas os NOMES dos arquivos
+        const fileNames = selectedFiles.map(file => file.name);
+
+        // Altera o botão para feedback visual
+        submitBtn.textContent = 'Enviando...';
+        submitBtn.disabled = true;
+
+        // Chamada para o Webhook n8n
+        fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Enviamos a lista de nomes dos arquivos
+            body: JSON.stringify({ fileNames: fileNames })
+        })
+        .then(response => {
+            if (response.ok) {
+                // Sucesso: Webhook recebeu a requisição
+                alert(`Sucesso! ${fileNames.length} arquivos enviados para a fila de processamento.`);
+            } else {
+                // Erro: Webhook respondeu com erro (ex: 404, 500)
+                alert(`ERRO! O webhook respondeu com status ${response.status}. Verifique o n8n.`);
+            }
+        })
+        .catch(error => {
+            // Falha: Erro de rede/conexão
+            console.error('Erro ao chamar o webhook:', error);
+            alert('Falha de conexão. O servidor n8n pode estar inacessível.');
+        })
+        .finally(() => {
+            // Limpa o estado após a tentativa de envio
+            submitBtn.textContent = 'Enviar Arquivos para Processamento';
+            submitBtn.disabled = false;
+            fileCountSpan.textContent = '0';
+            submitBtn.style.display = 'none';
+            selectedFiles = [];
+            fileInput.value = ''; // Limpa o input
+        });
+    });
+
+</script>
+
+</body>
+</html>
