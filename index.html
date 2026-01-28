@@ -169,50 +169,65 @@
         processFiles(fileInput.files);
     });
 
-    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (ENVIANDO O CONTEÚDO BINÁRIO) ---
-    submitBtn.addEventListener('click', () => {
+    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (AGORA ENVIA 1 POST POR ARQUIVO) ---
+    submitBtn.addEventListener('click', async () => {
         if (selectedFiles.length === 0) {
             alert("Nenhum arquivo XML selecionado para envio.");
             return;
         }
 
-        // Cria o objeto FormData (Necessário para enviar arquivos reais)
-        const formData = new FormData();
-        selectedFiles.forEach((file, index) => {
-            // Adiciona CADA arquivo no FormData, mantendo o nome original do arquivo
-            formData.append(`file_${index}`, file, file.name); 
-        });
-
         // Altera o botão para feedback visual
         submitBtn.textContent = 'Enviando...';
         submitBtn.disabled = true;
 
-        // Chamada para o Webhook n8n
-        fetch(WEBHOOK_URL, {
-            method: 'POST',
-            // O Content-Type é definido automaticamente pelo FormData (multipart/form-data)
-            body: formData 
-        })
-        .then(response => {
-            if (response.ok) {
-                alert(`Sucesso! ${selectedFiles.length} arquivos enviados para a fila de processamento.`);
-            } else {
-                alert(`ERRO! O webhook respondeu com status ${response.status}. Verifique o n8n.`);
+        const fileCount = selectedFiles.length;
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Dispara uma requisição de upload SEPARADA para cada arquivo
+        const uploads = selectedFiles.map(async (file) => {
+            const formData = new FormData();
+            
+            // CRÍTICO: Envia apenas UM arquivo por requisição, usando o campo 'file'
+            // esperado pelo Webhook e garantindo que o nome do arquivo seja enviado.
+            formData.append('file', file, file.name); 
+
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    // O Content-Type é definido automaticamente pelo FormData (multipart/form-data)
+                    body: formData 
+                });
+
+                if (response.ok) {
+                    successCount++;
+                } else {
+                    throw new Error(`Status HTTP: ${response.status}`);
+                }
+            } catch (error) {
+                console.error(`Erro ao enviar arquivo ${file.name}:`, error);
+                errorCount++;
             }
-        })
-        .catch(error => {
-            console.error('Erro ao chamar o webhook:', error);
-            alert('Falha de conexão. O servidor n8n pode estar inacessível.');
-        })
-        .finally(() => {
-            // Limpa o estado após a tentativa de envio
-            submitBtn.textContent = 'Enviar Arquivos para Processamento';
-            submitBtn.disabled = false;
-            fileCountSpan.textContent = '0';
-            submitBtn.style.display = 'none';
-            selectedFiles = [];
-            fileInput.value = '';
         });
+
+        // Espera que todos os uploads terminem. 
+        // Como são requisições separadas, o n8n as processará como execuções separadas.
+        await Promise.all(uploads);
+
+        // Feedback final
+        if (errorCount === 0) {
+            alert(`Sucesso! ${successCount} arquivos enviados para a fila de processamento.`);
+        } else {
+            alert(`Processamento Concluído. Sucesso: ${successCount}. Erros: ${errorCount}. Verifique o console para detalhes.`);
+        }
+        
+        // Limpa o estado após a tentativa de envio
+        submitBtn.textContent = 'Enviar Arquivos para Processamento';
+        submitBtn.disabled = false;
+        fileCountSpan.textContent = '0';
+        submitBtn.style.display = 'none';
+        selectedFiles = [];
+        fileInput.value = '';
     });
 
 </script>
