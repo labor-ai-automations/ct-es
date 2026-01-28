@@ -6,14 +6,18 @@
     <title>Upload Rápido de XMLs - FAMA</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     
+    <!-- SDK DO SUPABASE -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #1a1a2e; /* Fundo escuro */
             display: flex;
+            flex-direction: column; /* Permite múltiplos containers */
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             color: #fff;
         }
@@ -24,6 +28,7 @@
             background-color: #24243e; /* Fundo do card */
             border-radius: 10px;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            margin: 10px 0; /* Espaçamento entre os containers */
         }
         h2 {
             margin-top: 0;
@@ -90,11 +95,30 @@
             background-color: #218838;
             transform: translateY(-1px);
         }
+        /* Estilos adicionais para a tabela de consulta */
+        #quick-report-filter, #quick-start-date, #quick-end-date {
+            background: #2c2c48 !important;
+            color: #fff !important;
+            border: 1px solid #5c6bc0 !important;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        #quick-filter-btn {
+            background-color: #5c6bc0;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
+<!-- ============================================= -->
+<!-- CONTAINER DE UPLOAD -->
+<!-- ============================================= -->
 <div class="container">
     <h2>Upload Rápido de XMLs - FAMA</h2>
 
@@ -116,34 +140,92 @@
     </div>
 </div>
 
+<!-- ============================================= -->
+<!-- CONTAINER DE CONSULTA RÁPIDA -->
+<!-- ============================================= -->
+<div class="container" style="margin-top: 20px; max-width: 800px;">
+    <h3>Consulta Rápida de Processamento (Supabase)</h3>
+    
+    <div style="display: flex; gap: 15px; margin-bottom: 15px; background-color: #1a1a2e; padding: 10px; border-radius: 5px; flex-wrap: wrap;">
+        <!-- Filtro de Datas -->
+        <input type="date" id="quick-start-date">
+        <input type="date" id="quick-end-date">
+        
+        <!-- Filtro de Tipo de Relatório -->
+        <select id="quick-report-filter" style="flex-grow: 1;">
+            <option value="all">Todos os Relatórios</option>
+            <option value="fama-df-rizzo">Fama → DF (Rizzo)</option>
+            <option value="fama-df-outras">Fama → DF (Outras)</option>
+            <option value="fama-outros">Fama → Outros Clientes</option>
+            <option value="fama-compras">Fama (Compras)</option>
+            <option value="df-vendas">DF → Clientes Gerais</option>
+            <option value="Nao_Classificado">Não Classificado</option>
+        </select>
+
+        <button id="quick-filter-btn">Buscar</button>
+    </div>
+
+    <div style="max-height: 400px; overflow-y: auto; background-color: #2c2c48; border-radius: 5px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background-color: #333350;">
+                    <th style="padding: 10px; text-align: left;">Data</th>
+                    <th style="padding: 10px; text-align: left;">Chave NF-e</th>
+                    <th style="padding: 10px; text-align: left;">Tipo Relatório</th>
+                    <th style="padding: 10px; text-align: right;">Frete</th>
+                </tr>
+            </thead>
+            <tbody id="quick-report-body">
+                <tr><td colspan="4" style="text-align: center; padding: 20px; color: #b0b0b0;">Clique em Buscar para carregar os dados.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <script>
-    // URL DO SEU WEBHOOK N8N
+    // =========================================================
+    // CONFIGURAÇÕES GLOBAIS
+    // =========================================================
+    
+    // URL E CHAVE DO WEBHOOK N8N
     const WEBHOOK_URL = 'https://n8n-n8n.znxk1t.easypanel.host/webhook/receber-xml';
 
+    // CONFIGURAÇÕES DO SUPABASE (TRANSFERIDO DO DASHBOARD ANALÍTICO)
+    const SUPABASE_URL = 'https://pdqkvyxufnprapkgsvxx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkcWt2eXh1Zm5wcmFwa2dzdnh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMDE2MzAsImV4cCI6MjA3ODc3NzYzMH0.CFxmP1S8829joB6txKQ4bypp-Qr7SDHAg0P2Dgpti1k';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // =========================================================
+    // VARIÁVEIS DO DOM
+    // =========================================================
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const uploadLink = document.getElementById('upload-link');
     const fileCountSpan = document.getElementById('file-count');
     const submitBtn = document.getElementById('submit-btn');
+    
+    // Variáveis da nova seção
+    const quickReportBody = document.getElementById('quick-report-body');
+    const quickFilterBtn = document.getElementById('quick-filter-btn');
 
     let selectedFiles = [];
 
+    // =========================================================
+    // FUNÇÕES DE UTILIDADE
+    // =========================================================
+    function formatCurrency(val) {
+        return (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    
     function processFiles(files) {
-        // Filtra apenas arquivos XML e armazena
         selectedFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.xml'));
-
-        // Atualiza a contagem na tela
         fileCountSpan.textContent = selectedFiles.length;
-
-        // Mostra ou esconde o botão
-        if (selectedFiles.length > 0) {
-            submitBtn.style.display = 'block';
-        } else {
-            submitBtn.style.display = 'none';
-        }
+        submitBtn.style.display = selectedFiles.length > 0 ? 'block' : 'none';
     }
 
-    // --- 1. GATILHOS DA INTERFACE ---
+    // =========================================================
+    // 1. GATILHOS DA INTERFACE (UPLOAD)
+    // =========================================================
     
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -169,14 +251,15 @@
         processFiles(fileInput.files);
     });
 
-    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (AGORA ENVIA 1 POST POR ARQUIVO) ---
+    // =========================================================
+    // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (1 POST POR ARQUIVO)
+    // =========================================================
     submitBtn.addEventListener('click', async () => {
         if (selectedFiles.length === 0) {
             alert("Nenhum arquivo XML selecionado para envio.");
             return;
         }
 
-        // Altera o botão para feedback visual
         submitBtn.textContent = 'Enviando...';
         submitBtn.disabled = true;
 
@@ -184,18 +267,13 @@
         let successCount = 0;
         let errorCount = 0;
 
-        // Dispara uma requisição de upload SEPARADA para cada arquivo
         const uploads = selectedFiles.map(async (file) => {
             const formData = new FormData();
-            
-            // CRÍTICO: Envia apenas UM arquivo por requisição, usando o campo 'file'
-            // esperado pelo Webhook e garantindo que o nome do arquivo seja enviado.
-            formData.append('file', file, file.name); 
+            formData.append('file', file, file.name); // Envio 1:1
 
             try {
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
-                    // O Content-Type é definido automaticamente pelo FormData (multipart/form-data)
                     body: formData 
                 });
 
@@ -210,25 +288,85 @@
             }
         });
 
-        // Espera que todos os uploads terminem. 
-        // Como são requisições separadas, o n8n as processará como execuções separadas.
         await Promise.all(uploads);
 
         // Feedback final
         if (errorCount === 0) {
-            alert(`Sucesso! ${successCount} arquivos enviados para a fila de processamento.`);
+            alert(`Sucesso! ${successCount} arquivos enviados para a fila de processamento. Por favor, clique em "Buscar" na consulta rápida.`);
         } else {
-            alert(`Processamento Concluído. Sucesso: ${successCount}. Erros: ${errorCount}. Verifique o console para detalhes.`);
+            alert(`Processamento Concluído. Sucesso: ${successCount}. Erros: ${errorCount}.`);
         }
         
-        // Limpa o estado após a tentativa de envio
+        // Limpa o estado
         submitBtn.textContent = 'Enviar Arquivos para Processamento';
         submitBtn.disabled = false;
         fileCountSpan.textContent = '0';
         submitBtn.style.display = 'none';
         selectedFiles = [];
         fileInput.value = '';
+        
+        // Tenta atualizar a tabela de consulta rápida
+        await fetchQuickReport();
     });
+
+    // =========================================================
+    // 3. FUNÇÃO DE BUSCA RÁPIDA NO SUPABASE
+    // =========================================================
+    async function fetchQuickReport() {
+        const startDate = document.getElementById('quick-start-date').value;
+        const endDate = document.getElementById('quick-end-date').value;
+        const reportType = document.getElementById('quick-report-filter').value;
+        
+        quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Carregando...</td></tr>';
+        quickFilterBtn.disabled = true;
+
+        try {
+            let query = supabase.from('relatorio_consolidado')
+                .select('data_emissao_nfe, chave_nfe, report_type, custo_frete')
+                .order('data_emissao_nfe', { ascending: false });
+
+            if (startDate) {
+                query = query.gte('data_emissao_nfe', startDate);
+            }
+            if (endDate) {
+                query = query.lte('data_emissao_nfe', endDate);
+            }
+            if (reportType !== 'all') {
+                query = query.eq('report_type', reportType);
+            }
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+
+            renderQuickReport(data);
+
+        } catch (error) {
+            console.error('Erro ao buscar dados:', error);
+            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff5757; padding: 20px;">ERRO: Falha ao carregar dados. Verifique a conexão com o Supabase.</td></tr>';
+        } finally {
+            quickFilterBtn.disabled = false;
+        }
+    }
+
+    function renderQuickReport(data) {
+        if (!data || data.length === 0) {
+            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #b0b0b0;">Nenhum registro encontrado.</td></tr>';
+            return;
+        }
+
+        quickReportBody.innerHTML = data.map(item => `
+            <tr style="border-bottom: 1px solid #333350;">
+                <td style="padding: 8px 10px;">${new Date(item.data_emissao_nfe).toLocaleDateString('pt-BR')}</td>
+                <td style="padding: 8px 10px; font-family: monospace;">${item.chave_nfe.substring(0, 18)}...</td>
+                <td style="padding: 8px 10px;">${item.report_type}</td>
+                <td style="padding: 8px 10px; text-align: right;">${formatCurrency(item.custo_frete)}</td>
+            </tr>
+        `).join('');
+    }
+
+    // --- BINDING DO BOTÃO DE BUSCA ---
+    quickFilterBtn.addEventListener('click', fetchQuickReport);
 
 </script>
 
