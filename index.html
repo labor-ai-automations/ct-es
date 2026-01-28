@@ -188,7 +188,9 @@
     // CONFIGURAÇÕES DO SUPABASE (TRANSFERIDO DO DASHBOARD ANALÍTICO)
     const SUPABASE_URL = 'https://pdqkvyxufnprapkgsvxx.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkcWt2eXh1Zm5wcmFwa2dzdnh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMDE2MzAsImV4cCI6MjA3ODc3NzYzMH0.CFxmP1S8829joB6txKQ4bypp-Qr7SDHAg0P2Dgpti1k';
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Inicializa o cliente Supabase no objeto global 'window' para evitar conflito de declaração (SyntaxError)
+    window.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // NOME DA NOVA TABELA TEMPORÁRIA
     const SUPABASE_TABLE = 'fama_ctes_temp';
@@ -304,7 +306,8 @@
         quickFilterBtn.disabled = true;
 
         try {
-            let query = supabase.from(SUPABASE_TABLE) // Usando a nova tabela
+            // Usando a variável global para acessar o cliente Supabase
+            let query = window.supabaseClient.from(SUPABASE_TABLE) 
                 .select('data_emissao_nfe, chave_nfe, report_type, custo_frete')
                 .order('data_emissao_nfe', { ascending: false });
 
