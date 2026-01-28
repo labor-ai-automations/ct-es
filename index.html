@@ -227,15 +227,19 @@
     }
 
     // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD)
+    // 1. GATILHOS DA INTERFACE (UPLOAD) - CORRIGIDO D&D
     // =========================================================
     
+    // Previne que o navegador abra o arquivo quando solto em qualquer lugar da tela
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('drop', (e) => e.preventDefault());
+
     dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
+        e.preventDefault(); 
         dropZone.classList.add('drag-over');
     });
 
-    dropZone.addEventListener('dragleave', () => {
+    dropZone.addEventListener('dragleave', (e) => {
         dropZone.classList.remove('drag-over');
     });
 
