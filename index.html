@@ -189,11 +189,12 @@
     const SUPABASE_URL = 'https://pdqkvyxufnprapkgsvxx.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkcWt2eXh1Zm5wcmFwa2dzdnh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMDE2MzAsImV4cCI6MjA3ODc3NzYzMH0.CFxmP1S8829joB6txKQ4bypp-Qr7SDHAg0P2Dgpti1k';
     
-    // Inicializa o cliente Supabase no objeto global 'window' para evitar conflito de declaração (SyntaxError)
-    window.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     // NOME DA NOVA TABELA TEMPORÁRIA
     const SUPABASE_TABLE = 'fama_ctes_temp';
+
+    // Inicializa o cliente Supabase usando a sintaxe correta do SDK
+    // O SDK injeta a variável 'supabase' globalmente.
+    window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // =========================================================
     // VARIÁVEIS DO DOM
