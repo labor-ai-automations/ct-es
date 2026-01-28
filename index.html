@@ -227,27 +227,35 @@
     }
 
     // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD) - CORRIGIDO D&D
+    // 1. GATILHOS DA INTERFACE (UPLOAD) - CORREÇÃO AGRESSIVA DE EVENT BUBBLING
     // =========================================================
     
-    // Previne que o navegador abra o arquivo quando solto em qualquer lugar da tela
-    document.addEventListener('dragover', (e) => e.preventDefault());
-    document.addEventListener('drop', (e) => e.preventDefault());
+    // 1. PREVENÇÃO GLOBAL DE COMPORTAMENTO PADRÃO (Impede que o navegador abra o arquivo)
+    // Usamos 'document' para pegar o evento antes que ele chegue ao navegador
+    document.addEventListener('dragover', (e) => e.preventDefault(), false);
+    document.addEventListener('drop', (e) => e.preventDefault(), false);
 
+    // 2. LISTENERS ESPECÍFICOS DA DROP ZONE
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault(); 
+        e.stopPropagation(); // Impede que o evento suba
         dropZone.classList.add('drag-over');
-    });
+    }, false);
 
     dropZone.addEventListener('dragleave', (e) => {
         dropZone.classList.remove('drag-over');
-    });
+    }, false);
 
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation(); // Garante que o evento seja consumido aqui
         dropZone.classList.remove('drag-over');
-        processFiles(e.dataTransfer.files);
-    });
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            processFiles(files);
+        }
+    }, false);
 
     uploadLink.addEventListener('click', (e) => {
         e.preventDefault();
