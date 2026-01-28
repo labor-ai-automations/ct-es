@@ -14,7 +14,7 @@
             font-family: 'Inter', sans-serif;
             background-color: #1a1a2e; /* Fundo escuro */
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Permite múltiplos containers */
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -104,6 +104,22 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        .kpi-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 15px; 
+            margin-bottom: 20px;
+        }
+        /* Ajuste do container para caber a grade KPI */
+        .kpi-container {
+            max-width: 800px;
+            width: 90%;
+            padding: 30px;
+            background-color: #24243e;
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            margin: 10px 0;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -138,7 +154,7 @@
 <!-- ============================================= -->
 <!-- CONTAINER DE CONSULTA RÁPIDA -->
 <!-- ============================================= -->
-<div class="container" style="margin-top: 20px; max-width: 800px;">
+<div class="kpi-container">
     <h3>Consulta Rápida de Processamento (Supabase)</h3>
     
     <div style="display: flex; gap: 15px; margin-bottom: 15px; background-color: #1a1a2e; padding: 10px; border-radius: 5px; flex-wrap: wrap;">
@@ -158,6 +174,12 @@
         </select>
 
         <button id="quick-filter-btn">Buscar</button>
+    </div>
+
+    <!-- GRADE DE KPIS (Adicionada) -->
+    <div class="kpi-grid" id="kpi-report-grid">
+        <!-- KPIS serao inseridos aqui pelo JS -->
+        <h4>Clique em Buscar para carregar os KPIs...</h4>
     </div>
 
     <div style="max-height: 400px; overflow-y: auto; background-color: #2c2c48; border-radius: 5px;">
@@ -193,7 +215,6 @@
     const SUPABASE_TABLE = 'fama_ctes_temp';
 
     // Inicializa o cliente Supabase usando a sintaxe correta do SDK
-    // O SDK injeta a variável 'supabase' globalmente.
     window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // =========================================================
@@ -204,9 +225,9 @@
     const fileCountSpan = document.getElementById('file-count');
     const submitBtn = document.getElementById('submit-btn');
     
-    // Variáveis da nova seção
     const quickReportBody = document.getElementById('quick-report-body');
     const quickFilterBtn = document.getElementById('quick-filter-btn');
+    const kpiReportGrid = document.getElementById('kpi-report-grid'); // Novo DOM element
 
     let selectedFiles = [];
 
@@ -227,7 +248,6 @@
     // 1. GATILHOS DA INTERFACE (UPLOAD - APENAS CLIQUE)
     // =========================================================
     
-    // Listener de clique para abrir o input file (MECANISMO CONFIÁVEL)
     uploadLink.addEventListener('click', (e) => {
         e.preventDefault();
         fileInput.click();
@@ -291,51 +311,131 @@
         selectedFiles = [];
         fileInput.value = '';
         
-        // Tenta atualizar a tabela de consulta rápida
+        // Tenta atualizar a tabela de consulta rápida e KPIs
         await fetchQuickReport();
     });
 
     // =========================================================
-    // 3. FUNÇÃO DE BUSCA RÁPIDA NO SUPABASE
+    // 3. FUNÇÃO DE BUSCA E KPI NO SUPABASE
     // =========================================================
+    
+    // Função para buscar dados da tabela
+    async function fetchTableData(startDate, endDate, reportType) {
+        let query = window.supabaseClient.from(SUPABASE_TABLE) 
+            .select('data_emissao_nfe, chave_nfe, report_type, custo_frete')
+            .order('data_emissao_nfe', { ascending: false });
+
+        if (startDate) { query = query.gte('data_emissao_nfe', startDate); }
+        if (endDate) { query = query.lte('data_emissao_nfe', endDate); }
+        if (reportType !== 'all') { query = query.eq('report_type', reportType); }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data;
+    }
+
+    // Função para buscar totais agrupados (usando a função RPC get_report_totals)
+    async function fetchKpiTotals(startDate, endDate) {
+        // Formata datas para o formato string esperado pela função SQL (ou null)
+        const args = {
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
+        
+        const { data, error } = await window.supabaseClient.rpc('get_report_totals', args);
+        if (error) {
+             console.error("Erro ao chamar get_report_totals:", error);
+             // Retorna um array vazio para não quebrar a aplicação
+             return [];
+        }
+        return data || [];
+    }
+
+    // Função principal de busca
     async function fetchQuickReport() {
         const startDate = document.getElementById('quick-start-date').value;
         const endDate = document.getElementById('quick-end-date').value;
         const reportType = document.getElementById('quick-report-filter').value;
         
         quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Carregando...</td></tr>';
+        kpiReportGrid.innerHTML = '<h4>Carregando KPIs...</h4>';
         quickFilterBtn.disabled = true;
 
         try {
-            // Usando a variável global para acessar o cliente Supabase
-            let query = window.supabaseClient.from(SUPABASE_TABLE) 
-                .select('data_emissao_nfe, chave_nfe, report_type, custo_frete')
-                .order('data_emissao_nfe', { ascending: false });
+            // Buscas em paralelo
+            const [tableData, kpiTotals] = await Promise.all([
+                fetchTableData(startDate, endDate, reportType),
+                fetchKpiTotals(startDate, endDate)
+            ]);
 
-            if (startDate) {
-                query = query.gte('data_emissao_nfe', startDate);
-            }
-            if (endDate) {
-                query = query.lte('data_emissao_nfe', endDate);
-            }
-            if (reportType !== 'all') {
-                query = query.eq('report_type', reportType);
-            }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-
-            renderQuickReport(data);
+            renderQuickReport(tableData);
+            renderKpiTotals(kpiTotals);
 
         } catch (error) {
-            console.error('Erro ao buscar dados:', error);
-            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff5757; padding: 20px;">ERRO: Falha ao carregar dados. Verifique a conexão com o Supabase.</td></tr>';
+            console.error('Erro geral na busca:', error);
+            quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff5757; padding: 20px;">ERRO: Falha ao carregar dados.</td></tr>';
+            kpiReportGrid.innerHTML = '<h4>Falha ao carregar KPIs.</h4>';
         } finally {
             quickFilterBtn.disabled = false;
         }
     }
 
+    function renderKpiTotals(totals) {
+        kpiReportGrid.innerHTML = '';
+        
+        // Mapeamento de títulos amigáveis
+        const reportNames = {
+            'fama-df-rizzo': 'Fama → DF (Rizzo)',
+            'fama-df-outras': 'Fama → DF (Outras)',
+            'fama-outros': 'Fama → Outros Clientes',
+            'fama-compras': 'Fama (Compras)',
+            'df-vendas': 'DF → Clientes Gerais',
+            'Nao_Classificado': 'Não Classificado'
+        };
+
+        let totalGeralFrete = 0;
+        let totalGeralNFes = 0;
+
+        // Cria cards individuais
+        totals.forEach(item => {
+            const frete = parseFloat(item.total_frete) || 0;
+            const nFes = parseInt(item.total_nfes) || 0;
+            
+            totalGeralFrete += frete;
+            totalGeralNFes += nFes;
+
+            const title = reportNames[item.report_type] || item.report_type;
+
+            const card = document.createElement('div');
+            card.style.cssText = 'background: #333350; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
+            card.innerHTML = `
+                <div style="font-size: 11px; color: #b0b0b0;">${title.toUpperCase()}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #5c6bc0;">${formatCurrency(frete)}</div>
+                <div style="font-size: 10px; color: #ff5757;">${nFes} NF-es</div>
+            `;
+            kpiReportGrid.appendChild(card);
+        });
+
+        // Adiciona um card de Total Geral
+        const totalCard = document.createElement('div');
+        totalCard.style.cssText = 'background: #5c6bc0; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); color: white; grid-column: span 3;';
+        totalCard.innerHTML = `
+            <div style="font-size: 14px; font-weight: 700;">TOTAL GERAL CONSOLIDADO</div>
+            <div style="font-size: 24px; font-weight: 900;">${formatCurrency(totalGeralFrete)}</div>
+            <div style="font-size: 12px; opacity: 0.8;">Total de NF-es: ${totalGeralNFes}</div>
+        `;
+        // Para colocar o total geral no topo, garantindo que a grade 3-colunas comece abaixo dele
+        kpiReportGrid.style.gridTemplateColumns = '1fr'; // Altera temporariamente
+        kpiReportGrid.insertBefore(totalCard, kpiReportGrid.firstChild);
+        
+        // Coloca a grade em 3 colunas, mas mantém o total no topo (se a tela for grande o suficiente)
+        if (window.innerWidth > 768) {
+             kpiReportGrid.style.gridTemplateColumns = '1fr 1fr 1fr';
+        } else {
+             kpiReportGrid.style.gridTemplateColumns = '1fr';
+        }
+    }
+    
     function renderQuickReport(data) {
         if (!data || data.length === 0) {
             quickReportBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #b0b0b0;">Nenhum registro encontrado.</td></tr>';
@@ -351,11 +451,19 @@
             </tr>
         `).join('');
     }
+    
+    // Inicializa a grade de KPIs na primeira carga (para evitar a mensagem "Carregando KPIs..." indefinidamente)
+    document.addEventListener('DOMContentLoaded', () => {
+        kpiReportGrid.innerHTML = '<h4>Clique em Buscar para carregar os KPIs...</h4>';
+        window.addEventListener('resize', () => {
+             // Reajusta a grade ao redimensionar
+             renderKpiTotals([]); 
+        });
+    });
 
     // --- BINDING DO BOTÃO DE BUSCA ---
     quickFilterBtn.addEventListener('click', fetchQuickReport);
 
 </script>
-
 </body>
 </html>
