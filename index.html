@@ -34,7 +34,7 @@
             margin-top: 0;
             font-weight: 600;
         }
-        /* Área de Upload (Simplificada para apenas Clique) */
+        /* Área de Upload */
         .upload-area {
             border: 3px dashed #5c6bc0;
             border-radius: 10px;
@@ -42,6 +42,7 @@
             text-align: center;
             transition: all 0.3s;
             margin-bottom: 20px;
+            /* Removendo cursor: pointer globalmente para evitar confusão */
         }
         .upload-area i {
             font-size: 48px;
@@ -52,12 +53,6 @@
             margin: 5px 0;
             color: #b0b0b0;
             font-size: 14px;
-        }
-        .upload-area a {
-            color: #5c6bc0;
-            font-weight: bold;
-            text-decoration: none;
-            cursor: pointer;
         }
         .status-box {
             background-color: #1a1a2e;
@@ -135,7 +130,9 @@
         <i class="fas fa-file-upload"></i>
         <p>Utilize o botão abaixo para selecionar todos os XMLs.</p>
         <p style="font-size: 12px; color: #ff5757;">Apenas arquivos .xml são permitidos.</p>
-        <button id="upload-link" style="margin-top: 10px; padding: 10px 20px; background-color: #5c6bc0; color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">
+        
+        <!-- ELEMENTOS DE INPUT/BOTÃO -->
+        <button id="upload-link" type="button" style="margin-top: 10px; padding: 10px 20px; background-color: #5c6bc0; color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">
             Selecionar Arquivos XML
         </button>
         <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
@@ -229,7 +226,7 @@
     // VARIÁVEIS DO DOM
     // =========================================================
     const fileInput = document.getElementById('file-input');
-    const uploadLink = document.getElementById('upload-link');
+    const uploadLink = document.getElementById('upload-link'); // O botão de acionamento
     const fileCountSpan = document.getElementById('file-count');
     const submitBtn = document.getElementById('submit-btn');
     
@@ -275,11 +272,26 @@
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
-                // Quando 'Todos os Relatórios' está selecionado, a validação é se o report_type da linha bate
+                // Se for 'Todos os Relatórios', a validação é se o report_type da linha bate
                 return item.report_type === reportType || reportType === 'all'; 
         }
     }
 
+
+    // =========================================================
+    // 1. GATILHOS DA INTERFACE (UPLOAD - CLIQUE JS CORRETO)
+    // =========================================================
+    
+    // Conecta o botão visível ao input file escondido via JavaScript
+    uploadLink.addEventListener('click', (e) => {
+        e.preventDefault(); // Previne a ação padrão (se fosse um link)
+        fileInput.click();  // Aciona o seletor de arquivos
+    });
+
+    // Processa os arquivos quando a seleção muda
+    fileInput.addEventListener('change', () => {
+        processFiles(fileInput.files);
+    });
 
     // =========================================================
     // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK
@@ -506,7 +518,6 @@
             // LÓGICA DE PROVA DE VALOR
             const isValid = validateReportRule(item, selectedReportType);
             const validationStyle = isValid ? 'background-color: #00bcd4; color: black; font-weight: bold;' : 'background-color: #F44336; color: white; font-weight: bold;';
-            // Se o relatório filtrado for 'Todos', a validação deve ser sempre OK, pois a classificação foi feita
             const validationText = (selectedReportType === 'all' || isValid) ? 'OK' : 'FALHA (Regra)';
             
             // CNPJ Emitente FAMA ou DF?
