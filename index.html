@@ -275,7 +275,8 @@
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
-                return true; // Se for 'all', consideramos válido
+                // Quando 'Todos os Relatórios' está selecionado, a validação é se o report_type da linha bate
+                return item.report_type === reportType || reportType === 'all'; 
         }
     }
 
@@ -298,7 +299,7 @@
 
         const uploads = selectedFiles.map(async (file) => {
             const formData = new FormData();
-            formData.append('file', file, file.name);
+            formData.append('file', file, file.name); // Envio 1:1
 
             try {
                 const response = await fetch(WEBHOOK_URL, {
@@ -319,12 +320,14 @@
 
         await Promise.all(uploads);
 
+        // Feedback final
         if (errorCount === 0) {
             alert(`Sucesso! ${successCount} arquivos enviados. Atualize a consulta.`);
         } else {
             alert(`Processamento Concluído. Sucesso: ${successCount}. Erros: ${errorCount}.`);
         }
         
+        // Limpa o estado
         submitBtn.textContent = 'Enviar Arquivos para Processamento';
         submitBtn.disabled = false;
         fileCountSpan.textContent = '0';
@@ -332,6 +335,7 @@
         selectedFiles = [];
         fileInput.value = '';
         
+        // Tenta atualizar a tabela de consulta rápida e KPIs
         await fetchQuickReport();
     });
 
@@ -480,15 +484,15 @@
     // ATUALIZAÇÃO: Adiciona colunas de validação e lógica de PROVA DE VALOR
     function renderQuickReport(data, selectedReportType) {
         
-        // Colunas e cabeçalho da tabela
+        // Colunas e cabeçalho da tabela com LARGURAS FIXAS para facilitar a visualização
         quickReportBody.parentElement.querySelector('thead').innerHTML = `
             <tr style="background-color: #333350;">
-                <th style="padding: 10px; text-align: left;">Data</th>
-                <th style="padding: 10px; text-align: left;">Chave NF-e / CTEs</th>
-                <th style="padding: 10px; text-align: left;">Emit/Dest CNPJ</th>
-                <th style="padding: 10px; text-align: left;">Transp.</th>
-                <th style="padding: 10px; text-align: right;">Frete</th>
-                <th style="padding: 10px; text-align: center; color: #ff5757;">VALIDAÇÃO</th>
+                <th style="padding: 10px; text-align: left; width: 10%;">Data</th>
+                <th style="padding: 10px; text-align: left; width: 25%;">Chave NF-e / CTEs</th>
+                <th style="padding: 10px; text-align: left; width: 20%;">Emit/Dest CNPJ</th>
+                <th style="padding: 10px; text-align: left; width: 15%;">Transp.</th>
+                <th style="padding: 10px; text-align: right; width: 15%;">Frete</th>
+                <th style="padding: 10px; text-align: center; color: #ff5757; width: 15%;">VALIDAÇÃO</th>
             </tr>
         `;
 
@@ -502,7 +506,8 @@
             // LÓGICA DE PROVA DE VALOR
             const isValid = validateReportRule(item, selectedReportType);
             const validationStyle = isValid ? 'background-color: #00bcd4; color: black; font-weight: bold;' : 'background-color: #F44336; color: white; font-weight: bold;';
-            const validationText = isValid ? 'OK' : 'FALHA (Regra)';
+            // Se o relatório filtrado for 'Todos', a validação deve ser sempre OK, pois a classificação foi feita
+            const validationText = (selectedReportType === 'all' || isValid) ? 'OK' : 'FALHA (Regra)';
             
             // CNPJ Emitente FAMA ou DF?
             const isFamaEmit = CNPJS_FAMA.has(item.cnpj_emitente_nfe) ? ' (FAMA)' : '';
@@ -510,22 +515,24 @@
 
             return `
                 <tr style="border-bottom: 1px solid #333350;">
-                    <td style="padding: 8px 10px;">${new Date(item.data_emissao_nfe).toLocaleDateString('pt-BR')}</td>
-                    <td style="padding: 8px 10px; font-family: monospace;">
+                    <td style="padding: 8px 10px; width: 10%;">
+                        ${new Date(item.data_emissao_nfe).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td style="padding: 8px 10px; font-family: monospace; width: 25%;">
                         ${item.chave_nfe.substring(0, 18)}...
                         <div style="font-size: 10px; color: #5c6bc0;">${item.qtd_ctes} CTE(s)</div>
                     </td>
-                    <td style="padding: 8px 10px; font-size: 11px;">
+                    <td style="padding: 8px 10px; font-size: 11px; width: 20%;">
                         E: ${item.cnpj_emitente_nfe.substring(0, 8)}...${isFamaEmit}<br>
                         D: ${item.cnpj_destinatario_nfe.substring(0, 8)}...${isDFDest}
                     </td>
-                    <td style="padding: 8px 10px; font-size: 11px;">
+                    <td style="padding: 8px 10px; font-size: 11px; width: 15%;">
                         ${item.nome_transportadora.substring(0, 18)}...
                     </td>
-                    <td style="padding: 8px 10px; text-align: right; font-weight: bold;">
+                    <td style="padding: 8px 10px; text-align: right; font-weight: bold; width: 15%;">
                         ${formatCurrency(item.custo_frete)}
                     </td>
-                    <td style="padding: 8px 10px; text-align: center;">
+                    <td style="padding: 8px 10px; text-align: center; width: 15%;">
                         <span style="padding: 3px 8px; border-radius: 4px; font-size: 10px; ${validationStyle}">
                             ${validationText}
                         </span>
