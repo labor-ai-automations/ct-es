@@ -227,20 +227,20 @@
     }
 
     // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD) - CORREÇÃO AGRESSIVA DE EVENT BUBBLING
+    // 1. GATILHOS DA INTERFACE (UPLOAD) - CORREÇÃO FINAL D&D
     // =========================================================
     
-    // 1. PREVENÇÃO GLOBAL DE COMPORTAMENTO PADRÃO (Impede que o navegador abra o arquivo)
-    // Usamos 'document' para pegar o evento antes que ele chegue ao navegador
-    document.addEventListener('dragover', (e) => e.preventDefault(), false);
-    document.addEventListener('drop', (e) => e.preventDefault(), false);
+    // 1. PREVENÇÃO GLOBAL DE COMPORTAMENTO PADRÃO NA FASE DE CAPTURA (TRUE)
+    // Isso garante que cancelamos o evento ANTES que o navegador abra o XML
+    document.addEventListener('dragover', (e) => e.preventDefault(), true);
+    document.addEventListener('drop', (e) => e.preventDefault(), true);
 
     // 2. LISTENERS ESPECÍFICOS DA DROP ZONE
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault(); 
-        e.stopPropagation(); // Impede que o evento suba
+        e.stopPropagation(); 
         dropZone.classList.add('drag-over');
-    }, false);
+    }, false); // O false aqui é porque a captura já ocorreu acima
 
     dropZone.addEventListener('dragleave', (e) => {
         dropZone.classList.remove('drag-over');
@@ -248,7 +248,7 @@
 
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation(); // Garante que o evento seja consumido aqui
+        e.stopPropagation(); 
         dropZone.classList.remove('drag-over');
         
         const files = e.dataTransfer.files;
