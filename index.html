@@ -117,6 +117,7 @@
 </div>
 
 <script>
+    // URL DO SEU WEBHOOK N8N
     const WEBHOOK_URL = 'https://n8n-n8n.znxk1t.easypanel.host/webhook/73b57615-b35b-4ed7-951f-2da69149893c';
 
     const dropZone = document.getElementById('drop-zone');
@@ -142,7 +143,7 @@
         }
     }
 
-    // --- 1. GATILHOS DA INTERFACE (DRAG, DROP, CLICK) ---
+    // --- 1. GATILHOS DA INTERFACE ---
     
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -168,15 +169,19 @@
         processFiles(fileInput.files);
     });
 
-    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK ---
+    // --- 2. FUNÇÃO DE ENVIO PARA O WEBHOOK (ENVIANDO O CONTEÚDO BINÁRIO) ---
     submitBtn.addEventListener('click', () => {
         if (selectedFiles.length === 0) {
             alert("Nenhum arquivo XML selecionado para envio.");
             return;
         }
 
-        // Mapeia para pegar apenas os NOMES dos arquivos
-        const fileNames = selectedFiles.map(file => file.name);
+        // Cria o objeto FormData (Necessário para enviar arquivos reais)
+        const formData = new FormData();
+        selectedFiles.forEach((file, index) => {
+            // Adiciona CADA arquivo no FormData, mantendo o nome original do arquivo
+            formData.append(`file_${index}`, file, file.name); 
+        });
 
         // Altera o botão para feedback visual
         submitBtn.textContent = 'Enviando...';
@@ -185,21 +190,17 @@
         // Chamada para o Webhook n8n
         fetch(WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Enviamos a lista de nomes dos arquivos
-            body: JSON.stringify({ fileNames: fileNames })
+            // O Content-Type é definido automaticamente pelo FormData (multipart/form-data)
+            body: formData 
         })
         .then(response => {
             if (response.ok) {
-                // Sucesso: Webhook recebeu a requisição
-                alert(`Sucesso! ${fileNames.length} arquivos enviados para a fila de processamento.`);
+                alert(`Sucesso! ${selectedFiles.length} arquivos enviados para a fila de processamento.`);
             } else {
-                // Erro: Webhook respondeu com erro (ex: 404, 500)
                 alert(`ERRO! O webhook respondeu com status ${response.status}. Verifique o n8n.`);
             }
         })
         .catch(error => {
-            // Falha: Erro de rede/conexão
             console.error('Erro ao chamar o webhook:', error);
             alert('Falha de conexão. O servidor n8n pode estar inacessível.');
         })
@@ -210,7 +211,7 @@
             fileCountSpan.textContent = '0';
             submitBtn.style.display = 'none';
             selectedFiles = [];
-            fileInput.value = ''; // Limpa o input
+            fileInput.value = '';
         });
     });
 
