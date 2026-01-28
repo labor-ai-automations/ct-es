@@ -14,7 +14,7 @@
             font-family: 'Inter', sans-serif;
             background-color: #1a1a2e; /* Fundo escuro */
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Permite múltiplos containers */
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -34,7 +34,7 @@
             margin-top: 0;
             font-weight: 600;
         }
-        /* Área de Upload (LABEL clicável) */
+        /* Área de Upload (Simplificada para apenas Clique) */
         .upload-area {
             border: 3px dashed #5c6bc0;
             border-radius: 10px;
@@ -42,8 +42,6 @@
             text-align: center;
             transition: all 0.3s;
             margin-bottom: 20px;
-            /* Estilo adicionado: Cursor pointer para indicar clicabilidade */
-            cursor: pointer; 
         }
         .upload-area i {
             font-size: 48px;
@@ -54,6 +52,12 @@
             margin: 5px 0;
             color: #b0b0b0;
             font-size: 14px;
+        }
+        .upload-area a {
+            color: #5c6bc0;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
         }
         .status-box {
             background-color: #1a1a2e;
@@ -127,19 +131,15 @@
 <div class="container">
     <h2>Upload Rápido de XMLs - FAMA</h2>
 
-    <!-- USANDO LABEL FOR PARA CLIQUE NATIVO -->
-    <label for="file-input" class="upload-area">
+    <div class="upload-area">
         <i class="fas fa-file-upload"></i>
         <p>Utilize o botão abaixo para selecionar todos os XMLs.</p>
         <p style="font-size: 12px; color: #ff5757;">Apenas arquivos .xml são permitidos.</p>
-        
-        <!-- INPUT ESTÁ AQUI DENTRO DO LABEL E ESCONDIDO -->
-        <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
-        
-        <button type="button" style="margin-top: 10px; padding: 10px 20px; background-color: #5c6bc0; color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">
+        <button id="upload-link" style="margin-top: 10px; padding: 10px 20px; background-color: #5c6bc0; color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">
             Selecionar Arquivos XML
         </button>
-    </label>
+        <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
+    </div>
 
     <div class="status-box">
         <span>XMLs prontos para envio:</span>
@@ -229,7 +229,7 @@
     // VARIÁVEIS DO DOM
     // =========================================================
     const fileInput = document.getElementById('file-input');
-    // Não precisamos mais de 'uploadLink' no JS, pois o clique é nativo
+    const uploadLink = document.getElementById('upload-link');
     const fileCountSpan = document.getElementById('file-count');
     const submitBtn = document.getElementById('submit-btn');
     
@@ -275,21 +275,11 @@
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
+                // Quando 'Todos os Relatórios' está selecionado, a validação é se o report_type da linha bate
                 return item.report_type === reportType || reportType === 'all'; 
         }
     }
 
-
-    // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD - CLIQUE NATIVO)
-    // =========================================================
-    
-    // O clique no botão dentro do <label for="file-input"> funciona nativamente.
-    
-    // Adiciona o listener de 'change' ao input file
-    fileInput.addEventListener('change', () => {
-        processFiles(fileInput.files);
-    });
 
     // =========================================================
     // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK
@@ -516,6 +506,7 @@
             // LÓGICA DE PROVA DE VALOR
             const isValid = validateReportRule(item, selectedReportType);
             const validationStyle = isValid ? 'background-color: #00bcd4; color: black; font-weight: bold;' : 'background-color: #F44336; color: white; font-weight: bold;';
+            // Se o relatório filtrado for 'Todos', a validação deve ser sempre OK, pois a classificação foi feita
             const validationText = (selectedReportType === 'all' || isValid) ? 'OK' : 'FALHA (Regra)';
             
             // CNPJ Emitente FAMA ou DF?
