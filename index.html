@@ -428,13 +428,33 @@
         kpiReportGrid.innerHTML = '';
         
         const reportDetails = REPORT_DETAILS;
+        
+        // 1. Cria um mapa de totais para preencher os ausentes com zero (Para garantir que os 8 cartões apareçam)
+        const totalsMap = new Map();
+        totals.forEach(item => {
+            totalsMap.set(item.report_type, {
+                frete: parseFloat(item.total_frete) || 0,
+                cargas: parseInt(item.total_nfes) || 0 
+            });
+        });
+        
+        // 2. Preenche os 8 relatórios, pegando 0 se ausente
+        const allReports = Object.keys(REPORT_DETAILS).map(key => {
+            const current = totalsMap.get(key) || { frete: 0, cargas: 0 };
+            return {
+                report_type: key,
+                total_frete: current.frete,
+                total_nfes: current.cargas // Usamos total_nfes na chave para compatibilidade com o retorno SQL
+            };
+        });
+
 
         let totalGeralFrete = 0;
-        let totalGeralCTes = 0; // CORREÇÃO: Usando CT-es
+        let totalGeralCargas = 0; // Contagem total de Cargas/NF-es
 
-        totals.forEach(item => {
-            totalGeralFrete += parseFloat(item.total_frete) || 0;
-            totalGeralCTes += parseInt(item.total_nfes) || 0; // Usando a contagem de NF-es como contagem de CT-es consolidados
+        allReports.forEach(item => {
+            totalGeralFrete += item.total_frete;
+            totalGeralCargas += item.total_nfes;
         });
 
         // Card de Total Geral
@@ -443,12 +463,12 @@
         totalCard.innerHTML = `
             <div style="font-size: 14px; font-weight: 700;"><i class="fas fa-chart-line"></i> TOTAL GERAL CONSOLIDADO</div>
             <div style="font-size: 24px; font-weight: 900;">${formatCurrency(totalGeralFrete)}</div>
-            <div style="font-size: 12px; opacity: 0.8;">Total de CT-es consolidados: ${totalGeralCTes}</div> <!-- CORREÇÃO DE NOME -->
+            <div style="font-size: 12px; opacity: 0.8;">Total de Cargas (NF-es) consolidadas: ${totalGeralCargas}</div> <!-- CORREÇÃO DE NOME -->
         `;
         kpiReportGrid.appendChild(totalCard);
 
         // Cards individuais (Prova de Valor)
-        const sortedTotals = totals.sort((a, b) => {
+        const sortedTotals = allReports.sort((a, b) => {
             if (a.report_type === 'Nao_Classificado') return 1;
             if (b.report_type === 'Nao_Classificado') return -1;
             return parseFloat(b.total_frete) - parseFloat(a.total_frete);
@@ -456,7 +476,7 @@
         
         sortedTotals.forEach(item => {
             const frete = parseFloat(item.total_frete) || 0;
-            const nFes = parseInt(item.total_nfes) || 0; // Mantendo nFes aqui, pois a função SQL retorna total_nfes
+            const nCargas = parseInt(item.total_nfes) || 0; // Contagem de Cargas
             
             const detail = reportDetails[item.report_type] || { title: item.report_type, color: '#607D8B', icon: 'question-circle' };
             const percentual = totalGeralFrete > 0 ? (frete / totalGeralFrete) * 100 : 0;
@@ -479,7 +499,7 @@
                     ${formatCurrency(frete)}
                 </div>
                 <div style="font-size: 11px; color: #b0b0b0;">
-                    ${nFes} NF-es (${percentual.toFixed(1)}% do Total)
+                    ${nCargas} Cargas (${percentual.toFixed(1)}% do Total)
                 </div>
             `;
             kpiReportGrid.appendChild(card);
