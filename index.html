@@ -226,7 +226,7 @@
     // Transportadoras do Grupo RIZZO para identificação
     const TRANSPORTADORAS_RIZZO = ['RIZZO', 'GRR', 'NR']; 
 
-    // DEFINIÇÃO GLOBAL DOS DETALHES DO RELATÓRIO (MOVIDO PARA O TOPO)
+    // DEFINIÇÃO GLOBAL DOS DETALHES DO RELATÓRIO
     const REPORT_DETAILS = {
         'fama-compras-df-rizzo': { title: 'Fama (Compras DF/Rizzo)', color: '#9C27B0', icon: 'dolly' },
         'fama-compras-df-outras': { title: 'Fama (Compras DF/Outras)', color: '#4A148C', icon: 'box-open' },
@@ -294,26 +294,11 @@
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
-                // Quando 'Todos os Relatórios' está selecionado
+                // Quando 'Todos os Relatórios' está selecionado, a validação é se o report_type da linha bate
                 return item.report_type === reportType || reportType === 'all'; 
         }
     }
 
-
-    // =========================================================
-    // 1. GATILHOS DA INTERFACE (UPLOAD - CLIQUE JS CORRETO)
-    // =========================================================
-    
-    // Conecta o botão visível ao input file escondido via JavaScript
-    uploadLink.addEventListener('click', (e) => {
-        e.preventDefault(); 
-        fileInput.click();  
-    });
-
-    // Processa os arquivos quando a seleção muda
-    fileInput.addEventListener('change', () => {
-        processFiles(fileInput.files);
-    });
 
     // =========================================================
     // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK
@@ -442,15 +427,14 @@
     function renderKpiTotals(totals) {
         kpiReportGrid.innerHTML = '';
         
-        // Usa a constante global REPORT_DETAILS
         const reportDetails = REPORT_DETAILS;
 
         let totalGeralFrete = 0;
-        let totalGeralNFes = 0;
+        let totalGeralCTes = 0; // CORREÇÃO: Usando CT-es
 
         totals.forEach(item => {
             totalGeralFrete += parseFloat(item.total_frete) || 0;
-            totalGeralNFes += parseInt(item.total_nfes) || 0;
+            totalGeralCTes += parseInt(item.total_nfes) || 0; // Usando a contagem de NF-es como contagem de CT-es consolidados
         });
 
         // Card de Total Geral
@@ -459,7 +443,7 @@
         totalCard.innerHTML = `
             <div style="font-size: 14px; font-weight: 700;"><i class="fas fa-chart-line"></i> TOTAL GERAL CONSOLIDADO</div>
             <div style="font-size: 24px; font-weight: 900;">${formatCurrency(totalGeralFrete)}</div>
-            <div style="font-size: 12px; opacity: 0.8;">Total de NF-es processadas: ${totalGeralNFes}</div>
+            <div style="font-size: 12px; opacity: 0.8;">Total de CT-es consolidados: ${totalGeralCTes}</div> <!-- CORREÇÃO DE NOME -->
         `;
         kpiReportGrid.appendChild(totalCard);
 
@@ -472,7 +456,7 @@
         
         sortedTotals.forEach(item => {
             const frete = parseFloat(item.total_frete) || 0;
-            const nFes = parseInt(item.total_nfes) || 0;
+            const nFes = parseInt(item.total_nfes) || 0; // Mantendo nFes aqui, pois a função SQL retorna total_nfes
             
             const detail = reportDetails[item.report_type] || { title: item.report_type, color: '#607D8B', icon: 'question-circle' };
             const percentual = totalGeralFrete > 0 ? (frete / totalGeralFrete) * 100 : 0;
