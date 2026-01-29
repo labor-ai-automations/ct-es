@@ -226,6 +226,18 @@
     // Transportadoras do Grupo RIZZO para identificação
     const TRANSPORTADORAS_RIZZO = ['RIZZO', 'GRR', 'NR']; 
 
+    // DEFINIÇÃO GLOBAL DOS DETALHES DO RELATÓRIO (MOVIDO PARA O TOPO)
+    const REPORT_DETAILS = {
+        'fama-compras-df-rizzo': { title: 'Fama (Compras DF/Rizzo)', color: '#9C27B0', icon: 'dolly' },
+        'fama-compras-df-outras': { title: 'Fama (Compras DF/Outras)', color: '#4A148C', icon: 'box-open' },
+        'fama-df-rizzo': { title: 'Fama → DF (Rizzo)', color: '#4CAF50', icon: 'truck-loading' },
+        'fama-df-outras': { title: 'Fama → DF (Outras)', color: '#2196F3', icon: 'shipping-fast' },
+        'fama-outros': { title: 'Fama → Outros Clientes', color: '#FF9800', icon: 'warehouse' },
+        'fama-compras': { title: 'Fama (Compras)', color: '#9C27B0', icon: 'shopping-cart' },
+        'df-vendas': { title: 'DF → Clientes Gerais', color: '#00BCD4', icon: 'store' },
+        'Nao_Classificado': { title: 'Não Classificado', color: '#F44336', icon: 'exclamation-triangle' }
+    };
+
     // =========================================================
     // VARIÁVEIS DO DOM
     // =========================================================
@@ -282,11 +294,26 @@
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
-                // Quando 'Todos os Relatórios' está selecionado, a validação é se o report_type da linha bate
+                // Quando 'Todos os Relatórios' está selecionado
                 return item.report_type === reportType || reportType === 'all'; 
         }
     }
 
+
+    // =========================================================
+    // 1. GATILHOS DA INTERFACE (UPLOAD - CLIQUE JS CORRETO)
+    // =========================================================
+    
+    // Conecta o botão visível ao input file escondido via JavaScript
+    uploadLink.addEventListener('click', (e) => {
+        e.preventDefault(); 
+        fileInput.click();  
+    });
+
+    // Processa os arquivos quando a seleção muda
+    fileInput.addEventListener('change', () => {
+        processFiles(fileInput.files);
+    });
 
     // =========================================================
     // 2. FUNÇÃO DE ENVIO PARA O WEBHOOK
@@ -415,16 +442,8 @@
     function renderKpiTotals(totals) {
         kpiReportGrid.innerHTML = '';
         
-        const reportDetails = {
-            'fama-compras-df-rizzo': { title: 'Fama (Compras DF/Rizzo)', color: '#9C27B0', icon: 'dolly' },
-            'fama-compras-df-outras': { title: 'Fama (Compras DF/Outras)', color: '#4A148C', icon: 'box-open' },
-            'fama-df-rizzo': { title: 'Fama → DF (Rizzo)', color: '#4CAF50', icon: 'truck-loading' },
-            'fama-df-outras': { title: 'Fama → DF (Outras)', color: '#2196F3', icon: 'shipping-fast' },
-            'fama-outros': { title: 'Fama → Outros Clientes', color: '#FF9800', icon: 'warehouse' },
-            'fama-compras': { title: 'Fama (Compras)', color: '#9C27B0', icon: 'shopping-cart' },
-            'df-vendas': { title: 'DF → Clientes Gerais', color: '#00BCD4', icon: 'store' },
-            'Nao_Classificado': { title: 'Não Classificado', color: '#F44336', icon: 'exclamation-triangle' }
-        };
+        // Usa a constante global REPORT_DETAILS
+        const reportDetails = REPORT_DETAILS;
 
         let totalGeralFrete = 0;
         let totalGeralNFes = 0;
@@ -516,14 +535,14 @@
             // LÓGICA DE PROVA DE VALOR
             const isValid = validateReportRule(item, selectedReportType);
             const validationStyle = isValid ? 'background-color: #00bcd4; color: black; font-weight: bold;' : 'background-color: #F44336; color: white; font-weight: bold;';
-            const validationText = (selectedReportType === 'all' || isValid) ? 'OK' : 'FALHA';
+            const validationText = (selectedReportType === 'all' || isValid) ? 'OK' : 'FALHA (Regra)';
             
             // CNPJ Emitente FAMA ou DF?
             const isFamaEmit = CNPJS_FAMA.has(item.cnpj_emitente_nfe) ? ' (FAMA)' : '';
             const isDFDest = CNPJS_DF.has(item.cnpj_destinatario_nfe) ? ' (DF)' : '';
 
-            // Título amigável do relatório
-            const reportName = reportDetails[item.report_type]?.title || item.report_type;
+            // Título amigável do relatório (Acessa a constante global)
+            const reportName = REPORT_DETAILS[item.report_type]?.title || item.report_type;
 
             return `
                 <tr style="border-bottom: 1px solid #333350;">
@@ -570,5 +589,7 @@
     quickFilterBtn.addEventListener('click', fetchQuickReport);
 
 </script>
+</body>
+</html>
 </body>
 </html>
