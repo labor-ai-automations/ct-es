@@ -34,7 +34,7 @@
             margin-top: 0;
             font-weight: 600;
         }
-        /* Área de Upload */
+        /* Área de Upload (Simplificada para apenas Clique) */
         .upload-area {
             border: 3px dashed #5c6bc0;
             border-radius: 10px;
@@ -42,7 +42,6 @@
             text-align: center;
             transition: all 0.3s;
             margin-bottom: 20px;
-            /* Removendo cursor: pointer globalmente para evitar confusão */
         }
         .upload-area i {
             font-size: 48px;
@@ -131,11 +130,12 @@
         <p>Utilize o botão abaixo para selecionar todos os XMLs.</p>
         <p style="font-size: 12px; color: #ff5757;">Apenas arquivos .xml são permitidos.</p>
         
-        <!-- ELEMENTOS DE INPUT/BOTÃO -->
+        <!-- INPUT ESTÁ AQUI DENTRO DO LABEL E ESCONDIDO -->
+        <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
+        
         <button id="upload-link" type="button" style="margin-top: 10px; padding: 10px 20px; background-color: #5c6bc0; color: white; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">
             Selecionar Arquivos XML
         </button>
-        <input type="file" id="file-input" multiple accept=".xml" style="display: none;">
     </div>
 
     <div class="status-box">
@@ -167,6 +167,8 @@
             <option value="fama-outros">Fama → Outros Clientes</option>
             <option value="fama-compras">Fama (Compras)</option>
             <option value="df-vendas">DF → Clientes Gerais</option>
+            <option value="fama-compras-df-rizzo">Fama (Compras DF/Rizzo)</option> <!-- NOVO -->
+            <option value="fama-compras-df-outras">Fama (Compras DF/Outras)</option> <!-- NOVO -->
             <option value="Nao_Classificado">Não Classificado</option>
         </select>
 
@@ -221,12 +223,14 @@
         '36774169000146', '37231350000179', '41929655000126', 
         '46076637000162'
     ]);
+    // Transportadoras do Grupo RIZZO para identificação
+    const TRANSPORTADORAS_RIZZO = ['RIZZO', 'GRR', 'NR']; 
 
     // =========================================================
     // VARIÁVEIS DO DOM
     // =========================================================
     const fileInput = document.getElementById('file-input');
-    const uploadLink = document.getElementById('upload-link'); // O botão de acionamento
+    const uploadLink = document.getElementById('upload-link');
     const fileCountSpan = document.getElementById('file-count');
     const submitBtn = document.getElementById('submit-btn');
     
@@ -253,26 +257,32 @@
     function validateReportRule(item, reportType) {
         const emitenteFama = CNPJS_FAMA.has(item.cnpj_emitente_nfe);
         const destinatarioDF = CNPJS_DF.has(item.cnpj_destinatario_nfe);
-        const transportadoraRizzo = item.nome_transportadora.toUpperCase().includes('RIZZO');
+        const transportadoraRizzoGrupo = TRANSPORTADORAS_RIZZO.some(
+            alias => item.nome_transportadora.toUpperCase().includes(alias)
+        );
         const destinatarioFama = CNPJS_FAMA.has(item.cnpj_destinatario_nfe);
         const emitenteDF = CNPJS_DF.has(item.cnpj_emitente_nfe);
 
         // A regra deve ser a mesma do nó Code, mas no frontend
         switch (reportType) {
+            case 'fama-compras-df-rizzo':
+                return destinatarioFama && emitenteDF && transportadoraRizzoGrupo;
+            case 'fama-compras-df-outras':
+                return destinatarioFama && emitenteDF && !transportadoraRizzoGrupo;
             case 'fama-df-rizzo':
-                return emitenteFama && destinatarioDF && transportadoraRizzo;
+                return emitenteFama && destinatarioDF && transportadoraRizzoGrupo;
             case 'fama-df-outras':
-                return emitenteFama && destinatarioDF && !transportadoraRizzo;
+                return emitenteFama && destinatarioDF && !transportadoraRizzoGrupo;
             case 'fama-outros':
                 return emitenteFama && !destinatarioDF && !destinatarioFama;
-            case 'fama-compras':
-                return destinatarioFama;
             case 'df-vendas':
                 return emitenteDF && !destinatarioFama && !destinatarioDF;
+            case 'fama-compras':
+                return destinatarioFama;
             case 'Nao_Classificado':
                 return item.report_type === 'Nao_Classificado';
             default:
-                // Se for 'Todos os Relatórios', a validação é se o report_type da linha bate
+                // Quando 'Todos os Relatórios' está selecionado
                 return item.report_type === reportType || reportType === 'all'; 
         }
     }
@@ -284,8 +294,8 @@
     
     // Conecta o botão visível ao input file escondido via JavaScript
     uploadLink.addEventListener('click', (e) => {
-        e.preventDefault(); // Previne a ação padrão (se fosse um link)
-        fileInput.click();  // Aciona o seletor de arquivos
+        e.preventDefault(); 
+        fileInput.click();  
     });
 
     // Processa os arquivos quando a seleção muda
@@ -421,6 +431,8 @@
         kpiReportGrid.innerHTML = '';
         
         const reportDetails = {
+            'fama-compras-df-rizzo': { title: 'Fama (Compras DF/Rizzo)', color: '#9C27B0', icon: 'dolly' },
+            'fama-compras-df-outras': { title: 'Fama (Compras DF/Outras)', color: '#4A148C', icon: 'box-open' },
             'fama-df-rizzo': { title: 'Fama → DF (Rizzo)', color: '#4CAF50', icon: 'truck-loading' },
             'fama-df-outras': { title: 'Fama → DF (Outras)', color: '#2196F3', icon: 'shipping-fast' },
             'fama-outros': { title: 'Fama → Outros Clientes', color: '#FF9800', icon: 'warehouse' },
